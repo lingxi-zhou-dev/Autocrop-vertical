@@ -39,6 +39,7 @@ Instead of a simple, static center crop, this script analyzes video content scen
 *   **Lazy model loading.** YOLO and Haar cascade models are now loaded on first use instead of at import time. Heavy library imports (`torch`, `ultralytics`, `cv2`, etc.) are deferred until after argument parsing, so `--help` is instant.
 *   **Pinned dependency versions.** `requirements.txt` now specifies compatible version ranges to prevent breakage from upstream changes.
 *   **Replaced `exit()` with `sys.exit(1)`.** Ensures proper exit codes and reliable behavior in all environments.
+*   **Improved logging and progress reporting.** The script now prints an input file summary upfront (resolution, duration, fps, codec, file size, estimated frame count), shows progress bars on all slow operations (scene detection, VFR normalization, frame processing), displays the current scene during encoding, and prints a final summary with output file size, compression ratio, and processing speed.
 
 ---
 

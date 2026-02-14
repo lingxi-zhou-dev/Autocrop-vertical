@@ -82,7 +82,7 @@ def detect_scenes(video_path):
     scene_manager.add_detector(ContentDetector())
     video_manager.set_downscale_factor()
     video_manager.start()
-    scene_manager.detect_scenes(frame_source=video_manager)
+    scene_manager.detect_scenes(frame_source=video_manager, show_progress=True)
     scene_list = scene_manager.get_scene_list()
     fps = video_manager.get_framerate()
     video_manager.release()
@@ -141,6 +141,62 @@ def get_video_properties(video_path):
     cap.release()
     return width, height, fps
 
+def get_media_info(video_path):
+    """Returns a dict with human-readable info about the input file."""
+    info = {}
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries',
+             'format=duration,size',
+             '-show_entries', 'stream=codec_name,codec_type,width,height,r_frame_rate',
+             '-of', 'json', video_path],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            import json
+            data = json.loads(result.stdout)
+            fmt = data.get('format', {})
+            info['duration'] = float(fmt.get('duration', 0))
+            info['size_bytes'] = int(fmt.get('size', 0))
+            for stream in data.get('streams', []):
+                if stream.get('codec_type') == 'video' and 'video_codec' not in info:
+                    info['video_codec'] = stream.get('codec_name', 'unknown')
+                    info['width'] = stream.get('width', 0)
+                    info['height'] = stream.get('height', 0)
+                    rate = stream.get('r_frame_rate', '0/1')
+                    parts = rate.split('/')
+                    if len(parts) == 2 and int(parts[1]) != 0:
+                        info['fps'] = round(int(parts[0]) / int(parts[1]), 2)
+                    else:
+                        info['fps'] = float(parts[0])
+                elif stream.get('codec_type') == 'audio' and 'audio_codec' not in info:
+                    info['audio_codec'] = stream.get('codec_name', 'unknown')
+    except (FileNotFoundError, ValueError, KeyError):
+        pass
+    return info
+
+def format_duration(seconds):
+    """Formats seconds into a human-readable string like '1h 32m 15s'."""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    if h > 0:
+        return f"{h}h {m:02d}m {s:02d}s"
+    elif m > 0:
+        return f"{m}m {s:02d}s"
+    else:
+        return f"{s}s"
+
+def format_file_size(size_bytes):
+    """Formats bytes into a human-readable string."""
+    if size_bytes >= 1_073_741_824:
+        return f"{size_bytes / 1_073_741_824:.1f} GB"
+    elif size_bytes >= 1_048_576:
+        return f"{size_bytes / 1_048_576:.1f} MB"
+    elif size_bytes >= 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    return f"{size_bytes} B"
+
 def has_audio_stream(video_path):
     """Uses ffprobe to check whether the file contains an audio stream."""
     try:
@@ -195,7 +251,31 @@ def is_variable_frame_rate(video_path):
     except (FileNotFoundError, ValueError, ZeroDivisionError):
         return False
 
-def normalize_to_cfr(video_path, output_path):
+def run_ffmpeg_with_progress(command, total_duration, desc="Processing"):
+    """Runs an FFmpeg command and shows a tqdm progress bar based on stderr output."""
+    from tqdm import tqdm
+    import re
+    process = subprocess.Popen(
+        command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        universal_newlines=True
+    )
+    pbar = tqdm(total=int(total_duration), desc=desc, unit="s", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}s [{elapsed}<{remaining}]')
+    time_pattern = re.compile(r'time=(\d+):(\d+):(\d+)\.(\d+)')
+    last_seconds = 0
+    for line in process.stderr:
+        match = time_pattern.search(line)
+        if match:
+            h, m, s, _ = match.groups()
+            current_seconds = int(h) * 3600 + int(m) * 60 + int(s)
+            if current_seconds > last_seconds:
+                pbar.update(current_seconds - last_seconds)
+                last_seconds = current_seconds
+    pbar.update(int(total_duration) - last_seconds)
+    pbar.close()
+    process.wait()
+    return process.returncode
+
+def normalize_to_cfr(video_path, output_path, total_duration=0):
     """Re-muxes a VFR video to constant frame rate."""
     print("  Normalizing variable frame rate to constant frame rate...")
     command = [
@@ -203,13 +283,20 @@ def normalize_to_cfr(video_path, output_path):
         '-vsync', 'cfr', '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
         '-c:a', 'copy', output_path
     ]
-    try:
-        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        return True
-    except subprocess.CalledProcessError as e:
+    if total_duration > 0:
+        returncode = run_ffmpeg_with_progress(command, total_duration, desc="VFR → CFR")
+    else:
+        try:
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"  Warning: VFR normalization failed, proceeding with original file.")
+            print("  Stderr:", e.stderr.decode())
+            return False
+    if returncode != 0:
         print(f"  Warning: VFR normalization failed, proceeding with original file.")
-        print("  Stderr:", e.stderr.decode())
         return False
+    return True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Smartly crops a horizontal video into a vertical one.")
@@ -251,10 +338,34 @@ if __name__ == '__main__':
     cleanup_temp_files()
     if os.path.exists(final_output_video): os.remove(final_output_video)
 
+    # Print input file summary
+    media_info = get_media_info(input_video)
+    if media_info:
+        print(f"\n📄 Input: {os.path.basename(args.input)}")
+        parts = []
+        if 'width' in media_info:
+            parts.append(f"{media_info['width']}x{media_info['height']}")
+        if 'fps' in media_info:
+            parts.append(f"{media_info['fps']} fps")
+        if 'video_codec' in media_info:
+            parts.append(media_info['video_codec'])
+        if 'audio_codec' in media_info:
+            parts.append(media_info['audio_codec'])
+        if 'duration' in media_info:
+            parts.append(format_duration(media_info['duration']))
+        if 'size_bytes' in media_info:
+            parts.append(format_file_size(media_info['size_bytes']))
+        print(f"   {' | '.join(parts)}")
+        total_frames_est = int(media_info.get('duration', 0) * media_info.get('fps', 0))
+        if total_frames_est > 0:
+            print(f"   ~{total_frames_est:,} frames to process")
+        print()
+
     # Pre-processing: normalize VFR to CFR if needed
     if is_variable_frame_rate(input_video):
         print("⚠️  Variable frame rate detected — normalizing to constant frame rate first...")
-        if normalize_to_cfr(input_video, temp_cfr_input):
+        duration = media_info.get('duration', 0) if media_info else 0
+        if normalize_to_cfr(input_video, temp_cfr_input, total_duration=duration):
             input_video = temp_cfr_input
             print("✅ VFR normalization complete.")
         else:
@@ -329,7 +440,10 @@ if __name__ == '__main__':
     dropped_frames = 0
     last_output_frame = None
     
-    with tqdm(total=total_frames, desc="Applying Plan") as pbar:
+    num_scenes = len(scenes_analysis)
+    with tqdm(total=total_frames, desc=f"Processing [scene 1/{num_scenes}]",
+              unit="fr", dynamic_ncols=True,
+              bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as pbar:
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -338,6 +452,7 @@ if __name__ == '__main__':
             if current_scene_index < len(scenes_analysis) - 1 and \
                frame_number >= scenes_analysis[current_scene_index + 1]['start_frame']:
                 current_scene_index += 1
+                pbar.set_description(f"Processing [scene {current_scene_index + 1}/{num_scenes}]")
 
             scene_data = scenes_analysis[current_scene_index]
             strategy = scene_data['strategy']
@@ -436,5 +551,26 @@ if __name__ == '__main__':
         cleanup_temp_files()
 
     script_end_time = time.time()
-    print(f"\n🎉 All done! Final video saved to {final_output_video}")
-    print(f"⏱️  Total execution time: {script_end_time - script_start_time:.2f} seconds.")
+    total_time = script_end_time - script_start_time
+
+    # Final summary
+    print(f"\n{'─' * 50}")
+    print(f"🎉 All done! Final video saved to {final_output_video}")
+    print(f"{'─' * 50}")
+    output_info = get_media_info(final_output_video)
+    if output_info:
+        out_parts = []
+        if 'width' in output_info:
+            out_parts.append(f"{output_info['width']}x{output_info['height']}")
+        if 'duration' in output_info:
+            out_parts.append(format_duration(output_info['duration']))
+        if 'size_bytes' in output_info:
+            out_parts.append(format_file_size(output_info['size_bytes']))
+        print(f"   Output: {' | '.join(out_parts)}")
+    if media_info and output_info and media_info.get('size_bytes') and output_info.get('size_bytes'):
+        ratio = output_info['size_bytes'] / media_info['size_bytes'] * 100
+        print(f"   Size:   {format_file_size(media_info['size_bytes'])} → {format_file_size(output_info['size_bytes'])} ({ratio:.0f}% of original)")
+    print(f"   Time:   {format_duration(total_time)} ({total_time:.1f}s)")
+    if media_info and media_info.get('duration'):
+        speed = media_info['duration'] / total_time if total_time > 0 else 0
+        print(f"   Speed:  {speed:.1f}x real-time")
