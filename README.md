@@ -10,17 +10,18 @@ This tool combines intelligent vertical video cropping with AI-powered viral mom
 **End Goal:** Fully automated viral shorts generation pipeline
 
 ### What It Does Now:
-- Automatically converts horizontal → vertical (9:16) format
-- AI-powered scene analysis (YOLOv8) to detect and track people
-- Smart cropping: tracks subjects or adds letterbox based on scene content
-- Transcription generation with word-level timestamps
+- ✅ Automatically converts horizontal → vertical (9:16) format
+- ✅ AI-powered scene analysis (YOLOv8) to detect and track people
+- ✅ Smart cropping: tracks subjects or adds letterbox based on scene content
+- ✅ Transcription generation with word-level timestamps (faster-whisper)
+- ✅ **AI viral moment detection (Google Gemini API)** - identifies 3-15 engaging clips (15-60s each)
+- ✅ Platform-specific metadata generation (YouTube Shorts, TikTok, Instagram Reels)
+- ✅ Viral hook text suggestions for each clip
 
-### Coming Soon (Viral Shorts Features):
-- 🤖 AI viral moment detection (Gemini API) - identifies the most engaging 15-60s clips
+### Coming Soon (Remaining Features):
+- 📹 Automated clip extraction from viral moments
 - 📝 Auto-generated subtitles with TikTok-style formatting
-- 🎣 Viral hook text overlays (AI-generated attention-grabbing captions)
 - ✨ AI video effects (dynamic zooms, visual enhancements)
-- 📊 Platform-specific metadata (titles, descriptions for TikTok/Instagram/YouTube)
 - 📅 Multi-clip batch processing with performance analytics
 
 **Philosophy:** Instead of manual editing, let AI analyze your content, find viral moments, and create polished shorts ready to post.
@@ -36,9 +37,10 @@ See [VIRAL_SHORTS_ROADMAP.md](VIRAL_SHORTS_ROADMAP.md) for detailed implementati
 - [x] Transcript generation (faster-whisper)
 - [x] Word-level timestamp extraction
 
-### 🚧 Phase 2: Viral Detection (In Progress)
-- [ ] Gemini API integration for viral moment detection
-- [ ] Clip extraction with metadata
+### ✅ Phase 2: Viral Detection (Completed)
+- [x] **Google Gemini API integration** for viral moment detection
+- [x] **Metadata generation** (titles, descriptions, hooks)
+- [ ] Clip extraction (FFmpeg-based)
 
 ### 📅 Phase 3: Enhancement Features (Upcoming)
 - [ ] Auto-generated subtitles
@@ -64,11 +66,22 @@ python3 main.py -i video.mp4 -o vertical.mp4
 
 # Generate transcript with word-level timestamps
 python3 transcribe.py video.mp4 transcript.json
+
+# Detect viral moments from transcript (requires Gemini API key)
+python3 viral_detector.py video.mp4
 ```
 
 The `yolov8n.pt` model weights and Whisper models are downloaded automatically on first run.
 
-**Prerequisites:** Python 3.8+ and [FFmpeg](https://ffmpeg.org/) (`ffmpeg` + `ffprobe`) in your PATH.
+**For Viral Detection:** Get a free API key at https://aistudio.google.com/app/apikey and add it to a `.env` file:
+```bash
+GEMINI_API_KEY=your_api_key_here
+```
+
+**Prerequisites:** 
+- Python 3.8+ 
+- [FFmpeg](https://ffmpeg.org/) (`ffmpeg` + `ffprobe`) in your PATH
+- Google Gemini API key (free) for viral moment detection - get one at https://aistudio.google.com/app/apikey
 
 ---
 
@@ -99,23 +112,29 @@ python3 main.py -i video.mp4 -o vertical.mp4 --encoder hw
 python3 main.py -i video.mp4 -o vertical.mp4 --frame-skip 0
 ```
 
-**Viral Shorts Generation (Coming Soon):**
+**Viral Shorts Generation (Partial - Detection Available Now):**
 
 ```bash
-# Full viral shorts pipeline (when complete)
+# Current: Detect viral moments and generate metadata
+python3 viral_detector.py long_video.mp4
+
+# This will:
+# 1. Transcribe the video ✅
+# 2. Use AI to detect 3-15 viral moments ✅
+# 3. Generate platform-specific metadata ✅
+# 4. Save results to long_video_viral_clips.json ✅
+
+# Coming soon: Full pipeline with automatic extraction
 python3 main.py -i long_video.mp4 -o clips/ \
   --detect-viral \
   --add-subtitles \
   --add-hooks \
   --platforms tiktok,instagram,youtube
 
-# This will:
-# 1. Transcribe the video
-# 2. Use AI to detect 3-15 viral moments
-# 3. Convert each to vertical format
-# 4. Add subtitles and hook text
-# 5. Generate platform-specific metadata
-# 6. Output ready-to-post clips
+# This will also:
+# 5. Extract each clip to vertical format 🚧
+# 6. Add subtitles and hook text overlays 🚧
+# 7. Output ready-to-post clips 🚧
 ```
 
 # Maximum accuracy scene detection (slower)
@@ -236,6 +255,112 @@ The `test_stage_1_1.py` script verifies that:
 
 ---
 
+### Viral Moment Detection
+
+Automatically identify the most engaging clips from your video transcripts using AI.
+
+**Setup:**
+
+1. Get a free Google Gemini API key: https://aistudio.google.com/app/apikey
+2. Create a `.env` file in the project directory:
+   ```bash
+   GEMINI_API_KEY=your_api_key_here
+   ```
+
+**Quick Start:**
+
+```bash
+# Analyze video and detect viral moments
+python3 viral_detector.py video.mp4
+
+# This will:
+# 1. Transcribe the video (if not already done)
+# 2. Send transcript to Gemini API for analysis
+# 3. Identify 3-15 viral clips (15-60 seconds each)
+# 4. Save results to video_viral_clips.json
+```
+
+**What It Generates:**
+
+The output JSON file contains for each identified clip:
+- **Precise timestamps** (start/end times in seconds)
+- **Viral hook text** (catchy 10-word overlay suggestion)
+- **YouTube Shorts title** (optimized for YouTube)
+- **TikTok description** (with trending hashtags)
+- **Instagram Reels description** (with relevant hashtags)
+
+**Example Output:**
+```json
+{
+  "clips": [
+    {
+      "start": 106.02,
+      "end": 138.74,
+      "viral_hook_text": "Keto beats Ozempic for hunger?",
+      "video_title_for_youtube_short": "Keto vs Ozempic: The ULTIMATE Hunger Hormone Showdown! 🔥",
+      "video_description_for_tiktok": "Keto isn't just about fat! It naturally boosts GLP1...",
+      "video_description_for_instagram": "Forget Ozempic! Learn how keto naturally..."
+    }
+  ]
+}
+```
+
+**Usage in Python:**
+
+```python
+from transcribe import transcribe_video
+from viral_detector import detect_viral_clips
+
+# Step 1: Transcribe video
+transcript = transcribe_video('video.mp4')
+
+# Step 2: Detect viral moments
+clips = detect_viral_clips(transcript, video_duration=300)
+
+# Step 3: Use the clips
+for clip in clips:
+    print(f"Clip: {clip['start']:.1f}s - {clip['end']:.1f}s")
+    print(f"Hook: {clip['viral_hook_text']}")
+    print(f"YouTube: {clip['video_title_for_youtube_short']}")
+```
+
+**Model Options:**
+
+```python
+from viral_detector import ViralDetector
+
+# Use default model (gemini-2.5-flash - fast & free)
+detector = ViralDetector()
+
+# Use higher quality model
+detector = ViralDetector(model="gemini-2.5-pro")
+
+clips = detector.detect_viral_clips(transcript, video_duration=300)
+```
+
+**What the AI Looks For:**
+- Strong hooks (first 3 seconds are critical)
+- Jaw-dropping facts or revelations
+- Emotional moments and plot twists
+- Actionable tips and life hacks
+- Controversial or debate-worthy content
+- Natural cutting points (pauses, topic changes)
+
+**Testing:**
+
+```bash
+# Run the test suite (requires Gemini API key in .env)
+python3 test_stage_1_2.py
+```
+
+The test validates:
+- API connection works
+- JSON responses are properly formatted
+- Clip durations are within valid range (15-60s)
+- All required metadata fields are present
+
+---
+
 ### Key Features
 
 **Current Features (Vertical Conversion):**
@@ -302,25 +427,26 @@ Input Video
           Output Video
 ```
 
-**Future Pipeline (Viral Shorts):**
+**Viral Shorts Pipeline (Partially Complete):**
 
 ```
 Long Video Input (10-60 min)
     |
     v
 +-------------------------------+
-| 1. Transcription              |  faster-whisper: word-level timestamps
+| 1. Transcription ✅           |  faster-whisper: word-level timestamps
 +---------------+---------------+
                 |
                 v
 +-------------------------------+
-| 2. AI Viral Detection         |  Gemini analyzes transcript
-|    (Gemini API)               |  Identifies 3-15 viral moments (15-60s)
+| 2. AI Viral Detection ✅      |  Google Gemini analyzes transcript
+|    (Google Gemini API)        |  Identifies 3-15 viral moments (15-60s)
+|                               |  Generates hooks & metadata
 +---------------+---------------+
                 |
                 v
 +-------------------------------+
-| 3. Clip Extraction            |  FFmpeg cuts precise clips
+| 3. Clip Extraction 🚧         |  FFmpeg cuts precise clips
 +---------------+---------------+
                 |
                 v
@@ -374,10 +500,13 @@ This tool is built on a pipeline that uses specialized libraries for each step:
     *   `tqdm`: For clean and informative progress bars in the console.
     *   `faster-whisper`: CPU-optimized Whisper implementation for transcription.
 
-*   **Planned Stack (Viral Shorts):**
-    *   `Google Gemini API`: AI-powered viral moment detection and content analysis.
+*   **Implemented Stack (Viral Detection):**
+    *   `Google Gemini API` ✅: AI-powered viral moment detection and content analysis.
+    *   `google-genai` ✅: Official Google Gemini Python SDK.
+    *   `python-dotenv` ✅: Environment variable management for API keys.
+
+*   **Planned Stack (Remaining Features):**
     *   `Pillow (PIL)`: For generating hook text overlay images with styling.
-    *   `python-dotenv`: Environment variable management for API keys.
     *   `Upload-Post API` (optional): Multi-platform social media publishing.
 
 *   **Current Processing Pipeline:**
@@ -391,6 +520,40 @@ This tool is built on a pipeline that uses specialized libraries for each step:
 ---
 
 ### Changelog
+
+#### v1.5.0 (2026-04-03) — AI Viral Moment Detection
+
+**New Features:**
+
+*   **Google Gemini API Integration.** New `viral_detector.py` module identifies 3-15 viral moments (15-60s each) from video transcripts. Uses Google Gemini 2.5 Flash for fast, free analysis or Gemini 2.5 Pro for higher quality results.
+*   **Platform-specific metadata generation.** Automatically creates optimized titles and descriptions for YouTube Shorts, TikTok, and Instagram Reels, including trending hashtags.
+*   **Viral hook text suggestions.** AI generates catchy 10-word overlay text for each clip to maximize engagement.
+*   **Environment-based API key management.** Secure `.env` file support via `python-dotenv` for API credentials.
+*   **Comprehensive viral detection testing.** New `test_stage_1_2.py` validates API integration, JSON formatting, and clip validation logic.
+
+**What the AI Analyzes:**
+*   Strong hooks and attention-grabbing openings
+*   Jaw-dropping facts, emotional moments, plot twists
+*   Actionable tips and controversial content
+*   Natural cutting points at pauses or topic changes
+
+**Usage:**
+```bash
+# Get free API key from https://aistudio.google.com/app/apikey
+echo "GEMINI_API_KEY=your_key_here" > .env
+
+# Detect viral moments
+python3 viral_detector.py video.mp4
+
+# Run tests
+python3 test_stage_1_2.py
+```
+
+**Technical Details:**
+*   Uses `google-genai` SDK (latest, non-deprecated version)
+*   JSON-mode response for reliable parsing
+*   Validates clip durations (15-60s), timestamps, and required fields
+*   Free tier: 60 requests/minute with Gemini 2.5 Flash
 
 #### v1.4.1 (2026-02-15) — Cropping Accuracy Fix
 
