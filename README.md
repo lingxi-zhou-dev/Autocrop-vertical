@@ -1,33 +1,80 @@
-# YouTube Shorts Machine: Viral YouTube Shorts Clipper
+# YouTube Shorts Machine: AI-Powered Viral Shorts Generator
 
+**Transform long videos into viral-ready shorts automatically.**
 
-Automatically converts horizontal videos into vertical format for TikTok, Instagram Reels, and YouTube Shorts.
+This tool combines intelligent vertical video cropping with AI-powered viral moment detection to create engagement-optimized clips for TikTok, Instagram Reels, and YouTube Shorts.
 
-Instead of a static center crop, the script analyzes each scene using AI (YOLOv8), detects people, and decides whether to crop tightly on the subjects or letterbox to preserve the full shot.
+## 🎯 Project Vision
+
+**Current Phase:** Smart vertical video conversion with AI face tracking
+**End Goal:** Fully automated viral shorts generation pipeline
+
+### What It Does Now:
+- Automatically converts horizontal → vertical (9:16) format
+- AI-powered scene analysis (YOLOv8) to detect and track people
+- Smart cropping: tracks subjects or adds letterbox based on scene content
+- Transcription generation with word-level timestamps
+
+### Coming Soon (Viral Shorts Features):
+- 🤖 AI viral moment detection (Gemini API) - identifies the most engaging 15-60s clips
+- 📝 Auto-generated subtitles with TikTok-style formatting
+- 🎣 Viral hook text overlays (AI-generated attention-grabbing captions)
+- ✨ AI video effects (dynamic zooms, visual enhancements)
+- 📊 Platform-specific metadata (titles, descriptions for TikTok/Instagram/YouTube)
+- 📅 Multi-clip batch processing with performance analytics
+
+**Philosophy:** Instead of manual editing, let AI analyze your content, find viral moments, and create polished shorts ready to post.
+
+---
+
+## 🗺️ Implementation Roadmap
+
+See [VIRAL_SHORTS_ROADMAP.md](VIRAL_SHORTS_ROADMAP.md) for detailed implementation plan.
+
+### ✅ Phase 1: Core Infrastructure (Completed)
+- [x] Vertical video conversion with AI tracking
+- [x] Transcript generation (faster-whisper)
+- [x] Word-level timestamp extraction
+
+### 🚧 Phase 2: Viral Detection (In Progress)
+- [ ] Gemini API integration for viral moment detection
+- [ ] Clip extraction with metadata
+
+### 📅 Phase 3: Enhancement Features (Upcoming)
+- [ ] Auto-generated subtitles
+- [ ] Viral hook text overlays
+- [ ] AI video effects
+- [ ] Batch processing & reporting
 
 ---
 
 ### Quick Start
 
+**Current Features: Vertical Video Conversion**
+
 ```bash
-git clone https://github.com/kamilstanuch/AutoCrop-Vertical.git
-cd AutoCrop-Vertical
+git clone https://github.com/lingxi-zhou-dev/YouTube-Shorts-Machine.git
+cd YouTube-Shorts-Machine
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
+# Convert horizontal video to vertical
 python3 main.py -i video.mp4 -o vertical.mp4
+
+# Generate transcript with word-level timestamps
+python3 transcribe.py video.mp4 transcript.json
 ```
 
-The `yolov8n.pt` model weights are downloaded automatically on first run.
+The `yolov8n.pt` model weights and Whisper models are downloaded automatically on first run.
 
 **Prerequisites:** Python 3.8+ and [FFmpeg](https://ffmpeg.org/) (`ffmpeg` + `ffprobe`) in your PATH.
-
-source .venv/bin/activate && yt-dlp --extractor-args "youtube:player_client=android" "https://www.youtube.com/watch?v=video-id"
 
 ---
 
 ### Usage Examples
+
+**Vertical Video Conversion (Available Now):**
 
 ```bash
 # Basic — 9:16 vertical, balanced quality
@@ -47,6 +94,29 @@ python3 main.py -i video.mp4 -o vertical.mp4 --crf 20 --preset medium
 
 # Use hardware encoder (macOS VideoToolbox / NVIDIA NVENC)
 python3 main.py -i video.mp4 -o vertical.mp4 --encoder hw
+
+# Maximum accuracy scene detection (slower)
+python3 main.py -i video.mp4 -o vertical.mp4 --frame-skip 0
+```
+
+**Viral Shorts Generation (Coming Soon):**
+
+```bash
+# Full viral shorts pipeline (when complete)
+python3 main.py -i long_video.mp4 -o clips/ \
+  --detect-viral \
+  --add-subtitles \
+  --add-hooks \
+  --platforms tiktok,instagram,youtube
+
+# This will:
+# 1. Transcribe the video
+# 2. Use AI to detect 3-15 viral moments
+# 3. Convert each to vertical format
+# 4. Add subtitles and hook text
+# 5. Generate platform-specific metadata
+# 6. Output ready-to-post clips
+```
 
 # Maximum accuracy scene detection (slower)
 python3 main.py -i video.mp4 -o vertical.mp4 --frame-skip 0
@@ -168,6 +238,8 @@ The `test_stage_1_1.py` script verifies that:
 
 ### Key Features
 
+**Current Features (Vertical Conversion):**
+
 *   **Content-Aware Cropping:** YOLOv8 detects people and centers the vertical frame on them.
 *   **Automatic Letterboxing:** When people are too spread out for a vertical crop, black bars are added to preserve the full shot.
 *   **Scene-by-Scene Processing:** Decisions are made per scene for consistent, logical edits.
@@ -176,10 +248,23 @@ The `test_stage_1_1.py` script verifies that:
 *   **Hardware Encoder Support:** Optional `--encoder hw` auto-detects VideoToolbox (macOS) or NVENC (NVIDIA) with automatic fallback to libx264.
 *   **VFR Handling:** Variable frame rate sources are automatically normalized before processing.
 *   **Audio Sync:** Non-zero stream start times are detected and compensated to keep audio/video aligned.
+*   **Transcription:** faster-whisper generates word-level timestamps for precise subtitle timing.
+
+**Planned Features (Viral Shorts Pipeline):**
+
+*   **AI Viral Moment Detection:** Gemini API analyzes transcripts to identify 3-15 high-engagement clips (15-60s each)
+*   **Auto Subtitles:** TikTok-style captions with word-level timing, customizable fonts and colors
+*   **Hook Text Overlays:** AI-generated attention-grabbing text ("Did you know?", "Stop doing this!")
+*   **AI Video Effects:** Context-aware zooms, visual enhancements based on speech content
+*   **Platform Optimization:** Auto-generate titles, descriptions, hashtags for TikTok/Instagram/YouTube
+*   **Batch Processing:** Process multiple videos, generate analytics reports
+*   **Social Auto-Publishing:** Direct posting to platforms via Upload-Post API (optional)
 
 ---
 
 ### How It Works
+
+**Current Pipeline (Vertical Conversion):**
 
 ```
 Input Video
@@ -217,6 +302,49 @@ Input Video
           Output Video
 ```
 
+**Future Pipeline (Viral Shorts):**
+
+```
+Long Video Input (10-60 min)
+    |
+    v
++-------------------------------+
+| 1. Transcription              |  faster-whisper: word-level timestamps
++---------------+---------------+
+                |
+                v
++-------------------------------+
+| 2. AI Viral Detection         |  Gemini analyzes transcript
+|    (Gemini API)               |  Identifies 3-15 viral moments (15-60s)
++---------------+---------------+
+                |
+                v
++-------------------------------+
+| 3. Clip Extraction            |  FFmpeg cuts precise clips
++---------------+---------------+
+                |
+                v
++-------------------------------+
+| 4. Vertical Conversion        |  Existing pipeline (steps 1-6 above)
++---------------+---------------+
+                |
+                v
++-------------------------------+
+| 5. Enhancement                |  Add subtitles, hooks, AI effects
++---------------+---------------+
+                |
+                v
++-------------------------------+
+| 6. Metadata Generation        |  Platform-specific titles/descriptions
++---------------+---------------+
+                |
+                v
+    Multiple Viral Clips Ready to Post
+    (with metadata JSON per clip)
+```
+
+Steps 1-3 are the "analysis" phase (AI-powered). Steps 4-6 apply enhancements and prepare for distribution.
+
 Steps 1-3 are the "planning" phase (Python + AI). Step 4 applies the plan frame-by-frame and encodes via FFmpeg.
 
 ---
@@ -236,16 +364,23 @@ Scene detection is the dominant bottleneck (~50% of total time).
 
 ### Technical Details
 
-This script is built on a pipeline that uses specialized libraries for each step:
+This tool is built on a pipeline that uses specialized libraries for each step:
 
-*   **Core Libraries:**
+*   **Current Stack (Vertical Conversion):**
     *   `PySceneDetect`: For accurate, content-aware scene cut detection.
     *   `Ultralytics (YOLOv8)`: For fast and reliable person detection.
     *   `OpenCV`: Used for frame manipulation, face detection (as a fallback), and reading video properties.
     *   `FFmpeg` / `ffprobe`: The backbone of video encoding, audio extraction, and media stream analysis.
     *   `tqdm`: For clean and informative progress bars in the console.
+    *   `faster-whisper`: CPU-optimized Whisper implementation for transcription.
 
-*   **Processing Pipeline:**
+*   **Planned Stack (Viral Shorts):**
+    *   `Google Gemini API`: AI-powered viral moment detection and content analysis.
+    *   `Pillow (PIL)`: For generating hook text overlay images with styling.
+    *   `python-dotenv`: Environment variable management for API keys.
+    *   `Upload-Post API` (optional): Multi-platform social media publishing.
+
+*   **Current Processing Pipeline:**
     1.  **(Pre-processing)** If the source is VFR, it is normalized to constant frame rate.
     2.  `PySceneDetect` scans the video and returns a list of scene timestamps.
     3.  For each scene, `OpenCV` extracts a sample frame and `YOLOv8` detects people in it.
